@@ -242,11 +242,11 @@ echo
 
 for target in "${TARGETS[@]}"; do
     case "$target" in
-        x86_64) build_target x86_64 x86_64-linux-musl baseline ;;
-        armv5te) build_target armv5te arm-linux-musleabi arm926ej_s ;;
-        armv7a) build_target armv7a arm-linux-musleabi mpcorenovfp ;;
-        armv7hf) build_target armv7hf arm-linux-musleabihf cortex_a9 ;;
-        aarch64) build_target aarch64 aarch64-linux-musl generic ;;
+        x86_64) build_target x86_64 x86_64-linux.4.1.0...4.1.0-musl baseline ;;
+        armv5te) build_target armv5te arm-linux.2.6.36...2.6.36-musleabi arm926ej_s ;;
+        armv7a) build_target armv7a arm-linux.4.1.0...4.1.0-musleabi mpcorenovfp ;;
+        armv7hf) build_target armv7hf arm-linux.4.1.0...4.1.0-musleabihf cortex_a9 ;;
+        aarch64) build_target aarch64 aarch64-linux.4.1.0...4.1.0-musl generic ;;
         *) echo "unsupported target: $target" >&2; exit 1 ;;
     esac
     echo
