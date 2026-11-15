@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const app_version = "0.1.17";
+const app_version = "0.1.18";
 const max_input_size = 64 * 1024 * 1024;
 
 const Command = enum {
@@ -825,7 +825,11 @@ fn canonicalSourceMetaAlloc(allocator: std.mem.Allocator, obj: std.json.ObjectMa
         else
             try allocator.dupe(u8, "sub");
         errdefer allocator.free(airport_identity);
-        const source_scope = if (source_url_hash.len > 0)
+        const profile_id = (try jsonObjectTextAlloc(allocator, obj, "_profile_id")) orelse try allocator.dupe(u8, "");
+        defer allocator.free(profile_id);
+        const source_scope = if (profile_id.len > 0)
+            try std.fmt.allocPrint(allocator, "profile_{s}", .{profile_id})
+        else if (source_url_hash.len > 0)
             try std.fmt.allocPrint(allocator, "{s}_{s}", .{ airport_identity, source_url_hash })
         else
             try allocator.dupe(u8, airport_identity);
@@ -1531,7 +1535,11 @@ fn buildIdentityMetaAlloc(allocator: std.mem.Allocator, base_json: []const u8, n
     else
         try allocator.dupe(u8, "");
     errdefer allocator.free(source_url_hash);
-    const source_scope = if (source_url_hash.len > 0)
+    const source_scope = if (options.source_scope) |value|
+        try allocator.dupe(u8, value)
+    else if (options.profile_id) |profile_id|
+        try std.fmt.allocPrint(allocator, "profile_{s}", .{profile_id})
+    else if (source_url_hash.len > 0)
         try std.fmt.allocPrint(allocator, "{s}_{s}", .{ airport_identity, source_url_hash })
     else
         try allocator.dupe(u8, airport_identity);
@@ -4182,6 +4190,47 @@ test "inspect malformed base64 uri lines with trailing char" {
     const info = try detectContentInfo(allocator, src);
     defer allocator.free(info.content);
     try std.testing.expectEqual(InputKind.base64_uri_lines, info.kind);
+}
+
+test "profile id controls fancyss source scope" {
+    const allocator = std.testing.allocator;
+    const node = NormalizedNode{
+        .scheme = "ss",
+        .name = "Node",
+        .server = "example.com",
+        .port = 443,
+    };
+    const meta = try buildIdentityMetaAlloc(allocator, "{}", node, .{
+        .command = .parse_uri_lines,
+        .profile_id = "alpha",
+        .source_url_hash = "abcd",
+    });
+    defer allocator.free(meta.airport_identity);
+    defer allocator.free(meta.source_scope);
+    defer allocator.free(meta.source_url_hash);
+    try std.testing.expectEqualStrings("profile_alpha", meta.source_scope);
+
+    const explicit_meta = try buildIdentityMetaAlloc(allocator, "{}", node, .{
+        .command = .parse_uri_lines,
+        .profile_id = "alpha",
+        .source_scope = "explicit",
+    });
+    defer allocator.free(explicit_meta.airport_identity);
+    defer allocator.free(explicit_meta.source_scope);
+    defer allocator.free(explicit_meta.source_url_hash);
+    try std.testing.expectEqualStrings("explicit", explicit_meta.source_scope);
+}
+
+test "canonical comparison source scope prefers profile id" {
+    const allocator = std.testing.allocator;
+    var parsed = try std.json.parseFromSlice(std.json.Value, allocator,
+        "{\"_source\":\"subscribe\",\"_profile_id\":\"alpha\",\"_source_url_hash\":\"abcd\",\"group\":\"Example_abcd\"}", .{});
+    defer parsed.deinit();
+    const meta = try canonicalSourceMetaAlloc(allocator, parsed.value.object);
+    defer allocator.free(meta.airport_identity);
+    defer allocator.free(meta.source_scope);
+    defer allocator.free(meta.source_url_hash);
+    try std.testing.expectEqualStrings("profile_alpha", meta.source_scope);
 }
 
 test "parse ss link" {
