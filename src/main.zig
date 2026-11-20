@@ -2142,17 +2142,19 @@ fn buildTuicJsonBase64Alloc(allocator: std.mem.Allocator, node: NormalizedNode, 
     defer out.deinit(allocator);
     const writer = out.writer(allocator);
 
+    const sni_owned = try rawUriQueryValueAlloc(allocator, node, "sni");
+    defer if (sni_owned) |v| allocator.free(v);
+
     const server_host = blk: {
-        if ((try rawUriQueryValueAlloc(allocator, node, "sni"))) |sni_value| {
-            defer allocator.free(sni_value);
+        if (sni_owned) |sni_value| {
             if (isIpLiteral(node.server)) break :blk sni_value;
         }
         break :blk node.server;
     };
 
     const ip_value = blk: {
-        if ((try rawUriQueryValueAlloc(allocator, node, "sni"))) |_| {
-            if (isIpLiteral(node.server)) break :blk node.server;
+        if (sni_owned != null and isIpLiteral(node.server)) {
+            break :blk node.server;
         }
         if (node.host) |host_value| {
             if (!std.mem.eql(u8, host_value, node.server)) break :blk host_value;
